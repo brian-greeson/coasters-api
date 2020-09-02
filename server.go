@@ -25,6 +25,64 @@ type coasterHandlers struct {
 	store map[string]Coaster
 }
 
+func (h *coasterHandlers) Coaster(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.String(), "/")
+	if len(parts) != 3 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		h.getCoaster(w, r)
+		return
+	case "PUT":
+		h.put(w, r)
+		return
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte("method not allowed"))
+		return
+	}
+}
+
+func (h *coasterHandlers) put(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.String(), "/")
+	contentType := r.Header.Get("content-type")
+	if contentType != "application/json" {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		w.Write([]byte(fmt.Sprintf("required content-type 'application/json', but got '%s'", contentType)))
+		return
+	}
+
+	bodyBytes, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	h.Lock()
+	coaster, ok := h.store[parts[2]]
+	h.Unlock()
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	err = json.Unmarshal(bodyBytes, &coaster)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	h.Lock()
+	h.store[coaster.ID] = coaster
+	defer h.Unlock()
+}
+
 func (h *coasterHandlers) getCoaster(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.String(), "/")
 	if len(parts) != 3 {
@@ -185,7 +243,7 @@ func main() {
 	admin := newAdminPortal()
 	coasterHandlers := newCoasterHandlers()
 	http.HandleFunc("/coasters", coasterHandlers.coasters)
-	http.HandleFunc("/coasters/", coasterHandlers.getCoaster)
+	http.HandleFunc("/coasters/", coasterHandlers.Coaster)
 	http.HandleFunc("/admin", admin.handler)
 	err := http.ListenAndServe(":3000", nil)
 	if err != nil {
