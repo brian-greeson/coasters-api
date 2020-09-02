@@ -25,7 +25,7 @@ type coasterHandlers struct {
 	store map[string]Coaster
 }
 
-func (h *coasterHandlers) Coaster(w http.ResponseWriter, r *http.Request) {
+func (h *coasterHandlers) coaster(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.String(), "/")
 	if len(parts) != 3 {
 		w.WriteHeader(http.StatusNotFound)
@@ -39,11 +39,22 @@ func (h *coasterHandlers) Coaster(w http.ResponseWriter, r *http.Request) {
 	case "PUT":
 		h.put(w, r)
 		return
+	case "DELETE":
+		h.delete(w, r)
+		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		w.Write([]byte("method not allowed"))
 		return
 	}
+}
+
+func (h *coasterHandlers) delete(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.String(), "/")
+
+	h.Lock()
+	delete(h.store, parts[2])
+	h.Unlock()
 }
 
 func (h *coasterHandlers) put(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +254,7 @@ func main() {
 	admin := newAdminPortal()
 	coasterHandlers := newCoasterHandlers()
 	http.HandleFunc("/coasters", coasterHandlers.coasters)
-	http.HandleFunc("/coasters/", coasterHandlers.Coaster)
+	http.HandleFunc("/coasters/", coasterHandlers.coaster)
 	http.HandleFunc("/admin", admin.handler)
 	err := http.ListenAndServe(":3000", nil)
 	if err != nil {
